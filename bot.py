@@ -9,77 +9,66 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -------------------------
-# セレクトメニュー
-# -------------------------
-class RoleSelect(discord.ui.Select):
-    def __init__(self, roles):
-        options = [
-            discord.SelectOption(label=role.name, value=str(role.id))
-            for role in roles if not role.is_default()
-        ]
-
-        super().__init__(
-            placeholder="ロールを選択",
-            min_values=1,
-            max_values=1,
-            options=options[:25]
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        role_id = int(self.values[0])
-        role = guild.get_role(role_id)
-
-        # 同じカテゴリがあるか確認
-        existing = discord.utils.get(guild.categories, name=role.name)
-        if existing:
-            await interaction.response.send_message(
-                f"⚠️ {role.name}のカテゴリは既に存在します！",
-                ephemeral=True
-            )
-            return
-
-        # 権限設定
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            role: discord.PermissionOverwrite(view_channel=True)
-        }
-
-        # カテゴリ作成（ロール名）
-        category = await guild.create_category(role.name, overwrites=overwrites)
-
-        # テキストチャンネル「チャット」
-        await guild.create_text_channel("チャット", category=category)
-
-        # ボイスチャンネル「通話」
-        await guild.create_voice_channel("通話", category=category)
-
-        await interaction.response.send_message(
-            f"✅ {role.name}用の部屋を作成したよ！",
-            ephemeral=True
-        )
-
-# -------------------------
-# View
-# -------------------------
-class RoleView(discord.ui.View):
-    def __init__(self, roles):
-        super().__init__(timeout=60)
-        self.add_item(RoleSelect(roles))
-
-# -------------------------
-# スラッシュコマンド
+# 作成コマンド
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="create-room", description="ロールごとに部屋を作成")
-async def create_room(interaction: discord.Interaction):
-    roles = interaction.guild.roles
+@app_commands.describe(role="部屋を作るロールを選択")
+async def create_room(interaction: discord.Interaction, role: discord.Role):
 
-    view = RoleView(roles)
+    guild = interaction.guild
+
+    # 既に存在チェック
+    if discord.utils.get(guild.categories, name=role.name):
+        await interaction.response.send_message(
+            f"⚠️ {role.name}のカテゴリは既に存在します！",
+            ephemeral=True
+        )
+        return
+
+    # 権限設定
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        role: discord.PermissionOverwrite(view_channel=True)
+    }
+
+    # 作成
+    category = await guild.create_category(role.name, overwrites=overwrites)
+    await guild.create_text_channel("チャット", category=category)
+    await guild.create_voice_channel("通話", category=category)
 
     await interaction.response.send_message(
-        "ロールを選択してね！",
-        view=view,
+        f"✅ {role.name}の部屋を作成したよ！",
+        ephemeral=True
+    )
+
+# -------------------------
+# 削除コマンド（追加）
+# -------------------------
+@app_commands.checks.has_permissions(administrator=True)
+@bot.tree.command(name="delete-room", description="ロールの部屋を削除")
+@app_commands.describe(role="削除するロール")
+async def delete_room(interaction: discord.Interaction, role: discord.Role):
+
+    guild = interaction.guild
+    category = discord.utils.get(guild.categories, name=role.name)
+
+    if not category:
+        await interaction.response.send_message(
+            "❌ そのカテゴリは存在しない！",
+            ephemeral=True
+        )
+        return
+
+    # 中のチャンネル削除
+    for channel in category.channels:
+        await channel.delete()
+
+    # カテゴリ削除
+    await category.delete()
+
+    await interaction.response.send_message(
+        f"🗑️ {role.name}の部屋を削除したよ！",
         ephemeral=True
     )
 
@@ -100,7 +89,8 @@ async def on_ready():
 # エラー処理
 # -------------------------
 @create_room.error
-async def create_room_error(interaction: discord.Interaction, error):
+@delete_room.error
+async def error_handler(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.errors.MissingPermissions):
         await interaction.response.send_message(
             "❌ 管理者のみ使用できます",
