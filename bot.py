@@ -43,7 +43,7 @@ async def create_room(interaction: discord.Interaction, role: discord.Role):
     )
 
 # -------------------------
-# 削除コマンド（追加）
+# 削除コマンド
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="delete-room", description="ロールの部屋を削除")
@@ -71,6 +71,49 @@ async def delete_room(interaction: discord.Interaction, role: discord.Role):
         f"🗑️ {role.name}の部屋を削除したよ！",
         ephemeral=True
     )
+
+# -------------------------
+# 🔽 ここから追加（フィルター）
+# -------------------------
+
+# 作成用：まだ作ってないロールだけ表示
+@create_room.autocomplete("role")
+async def create_room_autocomplete(interaction: discord.Interaction, current: str):
+    choices = []
+    for role in interaction.guild.roles:
+        if role.is_default():
+            continue
+
+        # 既にカテゴリあるロールは除外
+        if discord.utils.get(interaction.guild.categories, name=role.name):
+            continue
+
+        if current.lower() in role.name.lower():
+            choices.append(
+                app_commands.Choice(name=role.name, value=role.id)
+            )
+
+    return choices[:25]
+
+
+# 削除用：すでにあるロールだけ表示
+@delete_room.autocomplete("role")
+async def delete_room_autocomplete(interaction: discord.Interaction, current: str):
+    choices = []
+    for role in interaction.guild.roles:
+        if role.is_default():
+            continue
+
+        # カテゴリがあるロールだけ
+        if not discord.utils.get(interaction.guild.categories, name=role.name):
+            continue
+
+        if current.lower() in role.name.lower():
+            choices.append(
+                app_commands.Choice(name=role.name, value=role.id)
+            )
+
+    return choices[:25]
 
 # -------------------------
 # 起動時
