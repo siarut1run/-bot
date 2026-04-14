@@ -17,7 +17,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def create_room(interaction: discord.Interaction, role: str):
 
     guild = interaction.guild
-    role = guild.get_role(int(role))  # ←ここ重要
+    role = guild.get_role(int(role))
 
     if not role:
         await interaction.response.send_message("ロールが見つからない！", ephemeral=True)
@@ -31,11 +31,13 @@ async def create_room(interaction: discord.Interaction, role: str):
         )
         return
 
+    # 権限設定
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         role: discord.PermissionOverwrite(view_channel=True)
     }
 
+    # 作成
     category = await guild.create_category(role.name, overwrites=overwrites)
     await guild.create_text_channel("チャット", category=category)
     await guild.create_voice_channel("通話", category=category)
@@ -46,7 +48,7 @@ async def create_room(interaction: discord.Interaction, role: str):
     )
 
 # -------------------------
-# 削除コマンド
+# 削除コマンド（全ロール表示）
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="delete-room", description="ロールの部屋を削除")
@@ -69,9 +71,11 @@ async def delete_room(interaction: discord.Interaction, role: str):
         )
         return
 
+    # 中のチャンネル削除
     for channel in category.channels:
         await channel.delete()
 
+    # カテゴリ削除
     await category.delete()
 
     await interaction.response.send_message(
@@ -80,7 +84,7 @@ async def delete_room(interaction: discord.Interaction, role: str):
     )
 
 # -------------------------
-# autocomplete（これでフィルター）
+# create用：未作成ロールのみ表示
 # -------------------------
 @create_room.autocomplete("role")
 async def create_room_autocomplete(interaction: discord.Interaction, current: str):
@@ -92,7 +96,9 @@ async def create_room_autocomplete(interaction: discord.Interaction, current: st
         and not discord.utils.get(interaction.guild.categories, name=role.name)
     ][:25]
 
-
+# -------------------------
+# delete用：全ロール表示（ここが変更点）
+# -------------------------
 @delete_room.autocomplete("role")
 async def delete_room_autocomplete(interaction: discord.Interaction, current: str):
     return [
@@ -100,7 +106,6 @@ async def delete_room_autocomplete(interaction: discord.Interaction, current: st
         for role in interaction.guild.roles
         if not role.is_default()
         and current.lower() in role.name.lower()
-        and discord.utils.get(interaction.guild.categories, name=role.name)
     ][:25]
 
 # -------------------------
