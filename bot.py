@@ -8,22 +8,20 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-GUILD_ID = 1479046199029006463  # ←ここに自分のサーバーID
-
 # -------------------------
 # 作成コマンド
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
-@bot.tree.command(
-    name="create-room",
-    description="ロールごとに部屋を作成",
-    guild=discord.Object(id=GUILD_ID)  # ←ギルド限定
-)
+@bot.tree.command(name="create-room", description="ロールごとに部屋を作成")
 @app_commands.describe(
     role="部屋を作るロールを選択",
     limit="ボイスの人数制限（未入力で無制限）"
 )
-async def create_room(interaction: discord.Interaction, role: str, limit: int = None):
+async def create_room(
+    interaction: discord.Interaction,
+    role: str,
+    limit: int = None
+):
 
     guild = interaction.guild
     role = guild.get_role(int(role))
@@ -32,6 +30,7 @@ async def create_room(interaction: discord.Interaction, role: str, limit: int = 
         await interaction.response.send_message("ロールが見つからない！", ephemeral=True)
         return
 
+    # 既に存在チェック
     if discord.utils.get(guild.categories, name=role.name):
         await interaction.response.send_message(
             f"⚠️ {role.name}のカテゴリは既に存在します！",
@@ -39,14 +38,17 @@ async def create_room(interaction: discord.Interaction, role: str, limit: int = 
         )
         return
 
+    # 権限設定
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         role: discord.PermissionOverwrite(view_channel=True)
     }
 
+    # 作成
     category = await guild.create_category(role.name, overwrites=overwrites)
     await guild.create_text_channel("チャット", category=category)
 
+    # VC作成（人数制限）
     if limit:
         await guild.create_voice_channel("通話", category=category, user_limit=limit)
     else:
@@ -61,11 +63,7 @@ async def create_room(interaction: discord.Interaction, role: str, limit: int = 
 # 削除コマンド
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
-@bot.tree.command(
-    name="delete-room",
-    description="ロールの部屋を削除",
-    guild=discord.Object(id=GUILD_ID)
-)
+@bot.tree.command(name="delete-room", description="ロールの部屋を削除")
 @app_commands.describe(role="削除するロール")
 async def delete_room(interaction: discord.Interaction, role: str):
 
@@ -96,7 +94,7 @@ async def delete_room(interaction: discord.Interaction, role: str):
     )
 
 # -------------------------
-# autocomplete
+# autocomplete（全ロール表示）
 # -------------------------
 @create_room.autocomplete("role")
 async def create_room_autocomplete(interaction: discord.Interaction, current: str):
@@ -118,16 +116,12 @@ async def delete_room_autocomplete(interaction: discord.Interaction, current: st
     ][:25]
 
 # -------------------------
-# 起動時（完全同期）
+# 起動時（グローバル同期）
 # -------------------------
 @bot.event
 async def on_ready():
-    guild = discord.Object(id=GUILD_ID)
-
-    bot.tree.clear_commands(guild=guild)  # ←古いコマンド削除
-    await bot.tree.sync(guild=guild)      # ←強制上書き
-
-    print(f"完全同期完了: {bot.user}")
+    await bot.tree.sync()
+    print(f"グローバル同期完了: {bot.user}")
 
 # -------------------------
 # エラー処理
