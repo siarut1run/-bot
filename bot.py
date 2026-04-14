@@ -8,7 +8,7 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-GUILD_ID = 123456789012345678  # ←ここに自分のサーバーID
+GUILD_ID = 1479046199029006463  # ←ここに自分のサーバーID
 
 # -------------------------
 # 作成コマンド
