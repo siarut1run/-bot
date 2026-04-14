@@ -9,7 +9,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -------------------------
-# 作成コマンド（人数制限追加）
+# 作成コマンド（人数制限あり）
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="create-room", description="ロールごとに部屋を作成")
@@ -20,7 +20,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def create_room(
     interaction: discord.Interaction,
     role: str,
-    limit: int = None  # ←追加（任意）
+    limit: int = None
 ):
 
     guild = interaction.guild
@@ -48,7 +48,7 @@ async def create_room(
     category = await guild.create_category(role.name, overwrites=overwrites)
     await guild.create_text_channel("チャット", category=category)
 
-    # 👇 人数制限あり / なし 分岐
+    # VC作成（人数制限）
     if limit:
         await guild.create_voice_channel("通話", category=category, user_limit=limit)
     else:
@@ -60,7 +60,7 @@ async def create_room(
     )
 
 # -------------------------
-# 削除コマンド（全ロール表示）
+# 削除コマンド
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="delete-room", description="ロールの部屋を削除")
@@ -83,11 +83,9 @@ async def delete_room(interaction: discord.Interaction, role: str):
         )
         return
 
-    # 中のチャンネル削除
     for channel in category.channels:
         await channel.delete()
 
-    # カテゴリ削除
     await category.delete()
 
     await interaction.response.send_message(
@@ -96,7 +94,7 @@ async def delete_room(interaction: discord.Interaction, role: str):
     )
 
 # -------------------------
-# create用：未作成ロールのみ表示
+# create用：全ロール表示（修正済み）
 # -------------------------
 @create_room.autocomplete("role")
 async def create_room_autocomplete(interaction: discord.Interaction, current: str):
@@ -105,7 +103,6 @@ async def create_room_autocomplete(interaction: discord.Interaction, current: st
         for role in interaction.guild.roles
         if not role.is_default()
         and current.lower() in role.name.lower()
-        and not discord.utils.get(interaction.guild.categories, name=role.name)
     ][:25]
 
 # -------------------------
