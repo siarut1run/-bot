@@ -14,9 +14,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="create-room", description="ロールごとに部屋を作成")
 @app_commands.describe(role="部屋を作るロールを選択")
-async def create_room(interaction: discord.Interaction, role: discord.Role):
+async def create_room(interaction: discord.Interaction, role: str):
 
     guild = interaction.guild
+    role = guild.get_role(int(role))  # ←ここ重要
+
+    if not role:
+        await interaction.response.send_message("ロールが見つからない！", ephemeral=True)
+        return
 
     # 既に存在チェック
     if discord.utils.get(guild.categories, name=role.name):
@@ -26,13 +31,11 @@ async def create_room(interaction: discord.Interaction, role: discord.Role):
         )
         return
 
-    # 権限設定
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         role: discord.PermissionOverwrite(view_channel=True)
     }
 
-    # 作成
     category = await guild.create_category(role.name, overwrites=overwrites)
     await guild.create_text_channel("チャット", category=category)
     await guild.create_voice_channel("通話", category=category)
@@ -48,9 +51,15 @@ async def create_room(interaction: discord.Interaction, role: discord.Role):
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="delete-room", description="ロールの部屋を削除")
 @app_commands.describe(role="削除するロール")
-async def delete_room(interaction: discord.Interaction, role: discord.Role):
+async def delete_room(interaction: discord.Interaction, role: str):
 
     guild = interaction.guild
+    role = guild.get_role(int(role))
+
+    if not role:
+        await interaction.response.send_message("ロールが見つからない！", ephemeral=True)
+        return
+
     category = discord.utils.get(guild.categories, name=role.name)
 
     if not category:
@@ -60,11 +69,9 @@ async def delete_room(interaction: discord.Interaction, role: discord.Role):
         )
         return
 
-    # 中のチャンネル削除
     for channel in category.channels:
         await channel.delete()
 
-    # カテゴリ削除
     await category.delete()
 
     await interaction.response.send_message(
@@ -73,59 +80,35 @@ async def delete_room(interaction: discord.Interaction, role: discord.Role):
     )
 
 # -------------------------
-# 🔽 ここから追加（フィルター）
+# autocomplete（これでフィルター）
 # -------------------------
-
-# 作成用：まだ作ってないロールだけ表示
 @create_room.autocomplete("role")
 async def create_room_autocomplete(interaction: discord.Interaction, current: str):
-    choices = []
-    for role in interaction.guild.roles:
-        if role.is_default():
-            continue
-
-        # 既にカテゴリあるロールは除外
-        if discord.utils.get(interaction.guild.categories, name=role.name):
-            continue
-
-        if current.lower() in role.name.lower():
-            choices.append(
-                app_commands.Choice(name=role.name, value=role.id)
-            )
-
-    return choices[:25]
+    return [
+        app_commands.Choice(name=role.name, value=str(role.id))
+        for role in interaction.guild.roles
+        if not role.is_default()
+        and current.lower() in role.name.lower()
+        and not discord.utils.get(interaction.guild.categories, name=role.name)
+    ][:25]
 
 
-# 削除用：すでにあるロールだけ表示
 @delete_room.autocomplete("role")
 async def delete_room_autocomplete(interaction: discord.Interaction, current: str):
-    choices = []
-    for role in interaction.guild.roles:
-        if role.is_default():
-            continue
-
-        # カテゴリがあるロールだけ
-        if not discord.utils.get(interaction.guild.categories, name=role.name):
-            continue
-
-        if current.lower() in role.name.lower():
-            choices.append(
-                app_commands.Choice(name=role.name, value=role.id)
-            )
-
-    return choices[:25]
+    return [
+        app_commands.Choice(name=role.name, value=str(role.id))
+        for role in interaction.guild.roles
+        if not role.is_default()
+        and current.lower() in role.name.lower()
+        and discord.utils.get(interaction.guild.categories, name=role.name)
+    ][:25]
 
 # -------------------------
 # 起動時
 # -------------------------
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"コマンド同期完了: {len(synced)}個")
-    except Exception as e:
-        print(e)
-
+    await bot.tree.sync()
     print(f"ログイン完了: {bot.user}")
 
 # -------------------------
