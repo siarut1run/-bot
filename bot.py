@@ -9,12 +9,19 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -------------------------
-# 作成コマンド
+# 作成コマンド（人数制限追加）
 # -------------------------
 @app_commands.checks.has_permissions(administrator=True)
 @bot.tree.command(name="create-room", description="ロールごとに部屋を作成")
-@app_commands.describe(role="部屋を作るロールを選択")
-async def create_room(interaction: discord.Interaction, role: str):
+@app_commands.describe(
+    role="部屋を作るロールを選択",
+    limit="ボイスの人数制限（未入力で無制限）"
+)
+async def create_room(
+    interaction: discord.Interaction,
+    role: str,
+    limit: int = None  # ←追加（任意）
+):
 
     guild = interaction.guild
     role = guild.get_role(int(role))
@@ -40,10 +47,15 @@ async def create_room(interaction: discord.Interaction, role: str):
     # 作成
     category = await guild.create_category(role.name, overwrites=overwrites)
     await guild.create_text_channel("チャット", category=category)
-    await guild.create_voice_channel("通話", category=category)
+
+    # 👇 人数制限あり / なし 分岐
+    if limit:
+        await guild.create_voice_channel("通話", category=category, user_limit=limit)
+    else:
+        await guild.create_voice_channel("通話", category=category)
 
     await interaction.response.send_message(
-        f"✅ {role.name}の部屋を作成したよ！",
+        f"✅ {role.name}の部屋を作成したよ！（人数制限: {limit if limit else 'なし'}）",
         ephemeral=True
     )
 
@@ -97,7 +109,7 @@ async def create_room_autocomplete(interaction: discord.Interaction, current: st
     ][:25]
 
 # -------------------------
-# delete用：全ロール表示（ここが変更点）
+# delete用：全ロール表示
 # -------------------------
 @delete_room.autocomplete("role")
 async def delete_room_autocomplete(interaction: discord.Interaction, current: str):
